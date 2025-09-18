@@ -1,6 +1,6 @@
-const CACHE_NAME = 'mandadito-v7';
+const CACHE_NAME = 'mandadito-v10';
 const urlsToCache = [
-  'mandadito_v9.html',
+  'mandadito_v10.html',
   'manifest.json',
   'icon-192.png',
   'icon-512.png'
