@@ -2,7 +2,7 @@
   "name": "Mandadito",
   "short_name": "Mandadito",
   "description": "Tu lista de mandado inteligente",
-  "start_url": "mandadito_v9.html",
+  "start_url": "mandadito_v10.html",
   "display": "standalone",
   "background_color": "#121212",
   "theme_color": "#007bff",
