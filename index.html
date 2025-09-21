@@ -94,7 +94,7 @@
         const userId = obtenerUserId();
 
         try {
-            const firebaseConfig = { databaseURL: "https://mandadito-62f09-default-rtdb.firebaseio.com" };
+            const firebaseConfig = { databaseURL: "https://mandadito-13341-default-rtdb.firebaseio.com" };
             firebase.initializeApp(firebaseConfig);
             const database = firebase.database();
             database.ref(`usuarios/${userId}/articulos`).on('value', (snapshot) => {
@@ -290,7 +290,7 @@
         function enviarPorWhatsApp() {
             const paraComprar = articulos.filter(a => a.cantidad_restante === 0 && a.es_predeterminado);
             if (paraComprar.length === 0) return alert("✅ Nada que enviar.");
-            let mensaje = "🛒 *LISTA MANDADITO*\n\n" + paraComprar.map(item => `• ${item.nombre} x${item.cantidad_total}`).join('\n') + `\n📅 ${new Date().toLocaleString()}\n\n📲 *¿Ya compraste algo?* Repórtalo aquí:\n👉 https://tally.so/r/waXKjP\n\n😊 ¡Gracias!`;
+            let mensaje = "🛒 *LISTA MANDADITO*\n\n" + paraComprar.map(item => `• ${item.nombre} x${item.cantidad_total}`).join('\n') + `\n📅 ${new Date().toLocaleString()}\n\n📲 *¿Ya compraste algo?* Repórtalo aquí:\n👉 https://rrodher.github.io/mandadito/index.html\n\n😊 ¡Gracias!`;
             window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(mensaje)}`, '_blank');
         }
 
