@@ -1,1 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Mandadito</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js "></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js "></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js "></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #121212; color: white; padding: 15px; }
+        .item { border: 1px solid #333; margin: 8px 0; padding: 10px; border-radius: 8px; background-color: #1e1e1e; font-size: 14px; }
+        button { margin: 3px; padding: 6px 12px; font-size: 14px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .predeterminado { background-color: #1e1e1e; border-left: 4px solid #007bff; }
+        .agotado { background-color: #330000; border-left: 4px solid #ff0000; }
+        .icono { font-size: 1.5em; margin-right: 10px; }
+        .titulo { display: flex; align-items: center; gap: 10px; }
+        #lista_compras div { background: #2d2d2d; padding: 8px; margin: 5px 0; border-radius: 5px; font-size: 14px; }
+        #qrcode { margin: 15px 0; text-align: center; }
+        #qrcode canvas { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); margin: 10px auto; display: block; max-width: 256px; }
+        #historial, #estadisticas, #totales { max-height: 200px; overflow-y: auto; background: #1e1e1e; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        footer { margin-top: 30px; padding: 15px; background: #1e1e1e; border-top: 1px solid #333; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="titulo">
+        <span class="icono">🛒</span>
+        <h1>Mandadito</h1>
+        <button onclick="toggleTema()" style="margin-left: auto; background: #333; padding: 5px 10px; font-size: 14px;">🌓</button>
+        <button onclick="cambiarGrupo()" style="margin-left: 5px; background: #333; padding: 5px 10px; font-size: 14px;">👥</button>
+    </div>
 
+    <h2>Agregar artículo</h2>
+    <div style="display: flex; gap: 5px;">
+        <input type="text" id="nombre" placeholder="Nombre del artículo" style="width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #333; background-color: #2d2d2d; color: white; font-size: 14px;">
+        <button onclick="iniciarReconocimientoVoz()" style="background:#4CAF50; color:white; padding:6px 10px; font-size:14px;">🎤</button>
+    </div>
+    <input type="number" id="cantidad" placeholder="Cantidad total" value="1" style="width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #333; background-color: #2d2d2d; color: white; font-size: 14px;">
+    <label><input type="checkbox" id="predeterminado" style="margin-right: 5px;">🔁</label>
+    <button onclick="agregarArticulo()">➕</button>
+
+    <h2>Mis artículos</h2>
+    <div style="margin: 10px 0;">
+        <button onclick="ordenarPor('nombre')">🔤</button>
+        <button onclick="ordenarPor('cantidad')">🔢</button>
+        <button onclick="ordenarPor('id')">⏳</button>
+        <button onclick="exportarDatos()">📤</button>
+        <button onclick="importarDatos()">📥</button>
+        <button onclick="limpiarTodo()" style="background:#ff3333; color:white; margin-left:5px; padding:6px 10px; font-size:14px;">🧹</button>
+    </div>
+    <div id="lista"></div>
+
+    <h2>📋 Lista de compras</h2>
+    <div id="lista_compras"></div>
+    <button onclick="generarListaCompras()">🔄</button>
+    <button onclick="generarQRLista()">🖼️</button>
+    <button onclick="enviarPorWhatsApp()">📲</button>
+    <div id="qrcode"></div>
+
+    <h2>📊 Totales</h2>
+    <div id="totales"></div>
+
+    <h2>📜 Historial</h2>
+    <div id="historial"></div>
+
+    <footer>
+        <div>
+            <a href="https://rrodher.github.io/mandadito/ " style="color: #007bff; text-decoration: none;">Mandadito</a>
+        </div>
+        <div>
+            Versión mandadito_v10
+        </div>
+        <div>
+            <button onclick="window.open('https://paypal.me/rrodher ', '_blank')" style="background:#0070ba; color:white; padding:6px 10px; font-size:12px; border-radius:5px;">💸 PayPal</button>
+        </div>
+    </footer>
+
+    <script>
+        let articulos = JSON.parse(localStorage.getItem('articulos')) || [];
+        let historial = JSON.parse(localStorage.getItem('historial')) || [];
+
+        function obtenerUserId() {
+            let userId = localStorage.getItem('mandadito_userId');
+            if (!userId) {
+                userId = prompt("👋 ¡Bienvenido a Mandadito!\n\n¿Cuál es el nombre de tu grupo?", "mi_grupo");
+                if (!userId || userId.trim() === '') userId = "mi_grupo";
+                localStorage.setItem('mandadito_userId', userId.trim());
+            }
+            return userId;
+        }
+
+        const userId = obtenerUserId();
+
+        try {
+            const firebaseConfig = { databaseURL: "https://mandadito-62f09-default-rtdb.firebaseio.com " };
+            firebase.initializeApp(firebaseConfig);
+            const database = firebase.database();
+            database.ref(`usuarios/${userId}/articulos`).on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    articulos = Object.values(data);
+                    renderizar();
+                    mostrarTotales();
+                }
+            });
+            function guardarEnFirebase() { database.ref(`usuarios/${userId}/articulos`).set(articulos); }
+        } catch (e) {
+            console.warn("Firebase offline.", e);
+            function guardarEnFirebase() {}
+        }
+
+        function cambiarGrupo() {
+            const nuevoGrupo = prompt("✏️ Cambiar grupo", localStorage.getItem('mandadito_userId'));
+            if (nuevoGrupo && nuevoGrupo.trim() !== '') {
+                localStorage.setItem('mandadito_userId', nuevoGrupo.trim());
+                alert(`✅ Grupo cambiado a: ${nuevoGrupo}`);
+                location.reload();
+            }
+        }
+
+        function limpiarTodo() {
+            if (confirm("🧹 ¿Estás seguro de limpiar TODO?")) {
+                localStorage.clear();
+                articulos = [];
+                historial = [];
+                alert("✅ ¡Todo limpio! Recarga la página.");
+                location.reload(true);
+            }
+        }
+
+        function iniciarReconocimientoVoz() {
+            if (!('webkitSpeechRecognition' in window)) {
+                alert("❌ Tu navegador no soporta voz.");
+                return;
+            }
+            const reconocimiento = new webkitSpeechRecognition();
+            reconocimiento.lang = 'es-MX';
+            reconocimiento.interimResults = false;
+            reconocimiento.start();
+            reconocimiento.onresult = function(event) {
+                const texto = event.results[0][0].transcript;
+                document.getElementById('nombre').value = texto;
+                alert(`🎤 Dijiste: "${texto}"`);
+            };
+            reconocimiento.onerror = function(event) {
+                alert("❌ Error: " + event.error);
+            };
+        }
+
+        // ... (el resto de tus funciones: registrarAccion, guardarArticulos, etc. ...)
+
+        function registrarAccion(accion, detalle, articuloNombre = "") {
+            const registro = { id: Date.now(), accion, detalle, articulo: articuloNombre, fecha: new Date().toLocaleString(), dispositivo: "Móvil" };
+            historial.unshift(registro);
+            historial = historial.slice(0, 100);
+            localStorage.setItem('historial', JSON.stringify(historial));
+            renderizarHistorial();
+        }
+
+        function guardarArticulos() {
+            localStorage.setItem('articulos', JSON.stringify(articulos));
+            guardarEnFirebase();
+            renderizar();
+            renderizarHistorial();
+            mostrarTotales();
+        }
+
+        function agregarArticulo() {
+            const nombre = document.getElementById('nombre').value.trim();
+            const cantidad = parseInt(document.getElementById('cantidad').value) || 1;
+            const esPredeterminado = document.getElementById('predeterminado').checked;
+            if (!nombre) return alert("❌ Escribe un nombre");
+            const nombreNormalizado = nombre.toLowerCase().trim();
+            const articuloExistente = articulos.find(a => a.nombre.toLowerCase().trim() === nombreNormalizado);
+            if (articuloExistente) return alert(`⚠️ "${nombre}" ya existe.`);
+            articulos.push({ id: Date.now(), nombre, cantidad_total: cantidad, cantidad_restante: cantidad, es_predeterminado: esPredeterminado });
+            document.getElementById('nombre').value = ''; document.getElementById('cantidad').value = '1'; document.getElementById('predeterminado').checked = false;
+            registrarAccion("Nuevo artículo", `Creado con ${cantidad} unidades`, nombre);
+            guardarArticulos();
+        }
+
+        function usarUnidad(id) {
+            const articulo = articulos.find(a => a.id == id);
+            if (articulo && articulo.cantidad_restante > 0) {
+                articulo.cantidad_restante--;
+                if (articulo.cantidad_restante === 0 && articulo.es_predeterminado) alert(`⚠️ ${articulo.nombre} se agotó.`);
+                registrarAccion("Usó unidad", "Restó 1 unidad", articulo.nombre);
+                guardarArticulos();
+            }
+        }
+
+        function eliminarArticulo(id) {
+            if (confirm("🗑️ ¿Eliminar?")) {
+                const articulo = articulos.find(a => a.id === id);
+                articulos = articulos.filter(a => a.id !== id);
+                registrarAccion("Eliminado", "Artículo eliminado", articulo?.nombre || "Desconocido");
+                guardarArticulos();
+            }
+        }
+
+        function ajustarCantidad(id) {
+            const articulo = articulos.find(a => a.id === id);
+            if (!articulo) return;
+            const nuevaCantidad = prompt(`✏️ Ajustar cantidad de "${articulo.nombre}"\nActual: ${articulo.cantidad_restante}`, articulo.cantidad_restante);
+            if (nuevaCantidad === null || nuevaCantidad.trim() === '' || isNaN(nuevaCantidad)) return alert("❌ No válido.");
+            const anterior = articulo.cantidad_restante;
+            articulo.cantidad_restante = parseInt(nuevaCantidad);
+            registrarAccion("Ajuste manual", `De ${anterior} a ${nuevaCantidad}`, articulo.nombre);
+            alert(`✅ Ajustado a ${nuevaCantidad}.`);
+            guardarArticulos();
+        }
+
+        function ordenarPor(campo) {
+            switch(campo) {
+                case 'nombre': articulos.sort((a, b) => a.nombre.localeCompare(b.nombre)); break;
+                case 'cantidad': articulos.sort((a, b) => a.cantidad_restante - b.cantidad_restante); break;
+                case 'id': articulos.sort((a, b) => b.id - a.id); break;
+            }
+            guardarArticulos();
+        }
+
+        function renderizar() {
+            const lista = document.getElementById('lista');
+            lista.innerHTML = '';
+            articulos.forEach(articulo => {
+                let clase = '';
+                if (articulo.es_predeterminado) clase += ' predeterminado';
+                if (articulo.cantidad_restante === 0) clase += ' agotado';
+                lista.innerHTML += `
+                    <div class="item ${clase}">
+                        <strong>${articulo.nombre}</strong><br>
+                        ${articulo.cantidad_restante}/${articulo.cantidad_total} ${articulo.cantidad_restante < articulo.cantidad_total && articulo.cantidad_restante > 0 ? `<small style="color:#ffcc00;">⚠️ Faltan ${articulo.cantidad_total - articulo.cantidad_restante}</small>` : ''}<br>
+                        ${articulo.es_predeterminado ? '🔁' : ''}
+                        ${articulo.cantidad_restante > 0 ? 
+                            `<button onclick="usarUnidad(${articulo.id})" style="padding:6px 10px; font-size:14px;">-1</button>` : 
+                            `<button style="background:red;color:white; padding:6px 10px; font-size:14px;">⛔</button>`}
+                        <button onclick="eliminarArticulo(${articulo.id})" style="background:#ff4d4d; color:white; padding:6px 10px; font-size:14px;">🗑️</button>
+                        <button onclick="ajustarCantidad(${articulo.id})" style="background:#ffa500; color:white; padding:6px 10px; font-size:14px;">✏️</button>
+                    </div>
+                `;
+            });
+        }
+
+        function generarListaCompras() {
+            const paraComprar = articulos.filter(a => a.cantidad_restante === 0 && a.es_predeterminado);
+            const contenedores = document.getElementById('lista_compras');
+            contenedores.innerHTML = paraComprar.length === 0 ? "<p>✅ ¡Nada que comprar!</p>" : 
+                `<h3>🛒 Para comprar:</h3>` + paraComprar.map(item => 
+                    `<div><strong>${item.nombre}</strong> x${item.cantidad_total}<button onclick="reponerArticulo(${item.id})" style="background:#28a745; color:white; margin-left:8px; padding:4px 8px; font-size:12px;">✅</button></div>`
+                ).join('');
+        }
+
+        function reponerArticulo(id) {
+            const articulo = articulos.find(a => a.id === id);
+            if (!articulo) return;
+            const comprado = prompt(`¿Cuántas unidades de "${articulo.nombre}" compraste?`, articulo.cantidad_total);
+            if (comprado === null || comprado.trim() === '' || isNaN(comprado)) return alert("❌ No válido.");
+            const cantidadComprada = parseInt(comprado);
+            articulo.cantidad_restante += cantidadComprada;
+            registrarAccion("Reposición", `Agregó ${cantidadComprada} unidades`, articulo.nombre);
+            if (articulo.cantidad_restante < articulo.cantidad_total) alert(`⚠️ Solo compraste ${cantidadComprada}. Faltan ${articulo.cantidad_total - articulo.cantidad_restante}.`);
+            else alert(`✅ ¡Completo!`);
+            guardarArticulos();
+            generarListaCompras();
+        }
+
+        function generarQRLista() {
+            const paraComprar = articulos.filter(a => a.cantidad_restante === 0 && a.es_predeterminado);
+            if (paraComprar.length === 0) return alert("✅ Nada para QR.");
+            let textoQR = "🛒 LISTA MANDADITO\n\n" + paraComprar.map(item => `• ${item.nombre} x${item.cantidad_total}`).join('\n') + `\n📅 ${new Date().toLocaleString()}`;
+            const contenedoresQR = document.getElementById('qrcode');
+            contenedoresQR.innerHTML = '<p>Generando QR...</p>';
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            contenedoresQR.innerHTML = ''; contenedoresQR.appendChild(canvas);
+            QRCode.toCanvas(canvas, textoQR, { width: 256, margin: 2 }, function (error) {
+                if (error) contenedoresQR.innerHTML = '<p style="color:red;">❌ Error al generar QR.</p>';
+                else {
+                    const descarga = document.createElement('a');
+                    descarga.href = canvas.toDataURL("image/png");
+                    descarga.download = 'mandadito_qr.png';
+                    descarga.innerText = '💾 Descargar QR';
+                    descarga.style.display = 'block'; descarga.style.textAlign = 'center'; descarga.style.marginTop = '10px'; descarga.style.color = '#007bff';
+                    contenedoresQR.appendChild(document.createElement('br')); contenedoresQR.appendChild(descarga);
+                }
+            });
+        }
+
+        function enviarPorWhatsApp() {
+            const paraComprar = articulos.filter(a => a.cantidad_restante === 0 && a.es_predeterminado);
+            if (paraComprar.length === 0) return alert("✅ Nada que enviar.");
+            let mensaje = "🛒 *LISTA MANDADITO*\n\n" + paraComprar.map(item => `• ${item.nombre} x${item.cantidad_total}`).join('\n') + `\n📅 ${new Date().toLocaleString()}\n\n📲 *¿Ya compraste algo?* Repórtalo aquí:\n👉 https://tally.so/r/waXKjP \n\n😊 ¡Gracias!`;
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(mensaje)}`, '_blank');
+        }
+
+        function renderizarHistorial() {
+            const contenedores = document.getElementById('historial');
+            contenedores.innerHTML = historial.length === 0 ? "<p>⏳ Sin historial aún.</p>" : historial.map(h => 
+                `<div style="border-bottom: 1px solid #333; padding: 5px 0; font-size: 12px;"><strong>${h.accion}</strong> - ${h.articulo}<br><small>${h.detalle} · ${h.fecha}</small></div>`
+            ).join('');
+        }
+
+        function mostrarTotales() {
+            const contenedores = document.getElementById('totales');
+            if (!contenedores) return;
+            const totalProductos = articulos.length;
+            const totalUnidades = articulos.reduce((sum, a) => sum + a.cantidad_restante, 0);
+            const totalPredeterminados = articulos.filter(a => a.es_predeterminado).length;
+            contenedores.innerHTML = `
+                <h3>📊 Resumen de inventario</h3>
+                <p><strong>Productos totales:</strong> ${totalProductos}</p>
+                <p><strong>Unidades disponibles:</strong> ${totalUnidades}</p>
+                <p><strong>Artículos predeterminados:</strong> ${totalPredeterminados}</p>
+            `;
+        }
+
+        function toggleTema() {
+            const body = document.body;
+            if (body.style.backgroundColor === "white") {
+                body.style.backgroundColor = "#121212"; body.style.color = "white";
+                document.querySelectorAll('.item, #lista_compras div, #historial, #estadisticas, #totales').forEach(el => { el.style.backgroundColor = "#1e1e1e"; el.style.color = "white"; });
+            } else {
+                body.style.backgroundColor = "white"; body.style.color = "#333";
+                document.querySelectorAll('.item, #lista_compras div, #historial, #estadisticas, #totales').forEach(el => { el.style.backgroundColor = "#f5f5f5"; el.style.color = "#333"; });
+            }
+        }
+
+        function exportarDatos() {
+            const data = { articulos, historial };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'mandadito_backup.json'; a.click();
+        }
+
+        function importarDatos() {
+            const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = event => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.articulos) { articulos = data.articulos; if (data.historial) historial = data.historial; guardarArticulos(); alert("✅ Datos importados."); }
+                    } catch (e) { alert("❌ Error al importar."); }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(console.error);
+            });
+        }
+
+        renderizar(); renderizarHistorial(); mostrarTotales();
+    </script>
+</body>
+</html>
